@@ -6,6 +6,10 @@ serveur MCP qui expose une météo factice, un seul agent qui l'interroge,
 et un LLM 100 % local via [Ollama](https://ollama.com). Pas de cloud, pas
 d'API payante, pas de complexité inutile.
 
+> **Débutant·e sur MCP ?** Commence par [TUTORIEL.md](TUTORIEL.md) : il
+> explique de zéro ce qu'est un LLM, un agent, MCP, et montre message par
+> message ce qui circule entre eux. Puis reviens ici pour lancer le projet.
+
 ## L'idée en une image
 
 ```
