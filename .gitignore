@@ -1,0 +1,6 @@
+# Environnement virtuel Python (créé par les étapes du README)
+.venv/
+
+# Fichiers compilés Python
+__pycache__/
+*.pyc
