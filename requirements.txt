@@ -1,0 +1,9 @@
+# SDK officiel MCP (Model Context Protocol) — fournit à la fois :
+#   - FastMCP, pour écrire le serveur (mcp-server/server.py)
+#   - ClientSession + stdio_client, pour le client côté agent (agent/agent.py)
+# Nécessite Python 3.10 ou plus récent.
+mcp>=1.0.0
+
+# Client Python officiel d'Ollama — permet à l'agent de parler au LLM
+# local (llama3.2) et d'utiliser le tool calling.
+ollama>=0.4.0
