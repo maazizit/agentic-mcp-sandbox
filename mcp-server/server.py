@@ -1,5 +1,5 @@
 """
-Serveur MCP minimal — expose UN SEUL outil : une météo factice.
+Serveur MCP minimal — expose UN SEUL outil : la météo réelle.
 ================================================================
 
 C'EST QUOI UN SERVEUR MCP ?
@@ -48,7 +48,7 @@ LE SDK OFFICIEL (FastMCP)
   - mcp.run() démarre la boucle qui lit stdin / écrit stdout.
 """
 
-import random
+import requests
 
 # FastMCP est la façon "haut niveau" d'écrire un serveur MCP en Python.
 from mcp.server.fastmcp import FastMCP
@@ -56,7 +56,40 @@ from mcp.server.fastmcp import FastMCP
 # On crée le serveur en lui donnant un nom. Ce nom est envoyé au client
 # pendant la poignée de main "initialize" — il sert à identifier le serveur
 # (utile quand un agent est connecté à plusieurs serveurs à la fois).
-mcp = FastMCP("meteo-factice")
+mcp = FastMCP("meteo-reelle")
+
+# Open-Meteo (https://open-meteo.com) : API météo gratuite, sans clé
+# d'API et sans inscription — parfaite pour ce bac à sable. On l'appelle
+# en deux temps :
+#   1. le géocodage : transformer un nom de ville ("Paris") en coordonnées
+#      GPS (latitude/longitude), car l'API météo ne comprend pas les noms
+#      de ville, seulement des coordonnées ;
+#   2. la prévision : donner ces coordonnées pour obtenir la météo actuelle.
+URL_GEOCODAGE = "https://geocoding-api.open-meteo.com/v1/search"
+URL_METEO = "https://api.open-meteo.com/v1/forecast"
+
+# Open-Meteo renvoie un "code météo" numérique (norme WMO), pas un texte.
+# On traduit les codes les plus courants en français. Liste complète :
+# https://open-meteo.com/en/docs#weathervariables
+CODES_METEO = {
+    0: "ciel dégagé",
+    1: "plutôt dégagé",
+    2: "partiellement nuageux",
+    3: "couvert",
+    45: "brouillard",
+    48: "brouillard givrant",
+    51: "bruine légère",
+    53: "bruine modérée",
+    55: "bruine dense",
+    61: "pluie légère",
+    63: "pluie modérée",
+    65: "forte pluie",
+    71: "neige légère",
+    73: "neige modérée",
+    75: "forte neige",
+    80: "averses",
+    95: "orage",
+}
 
 
 # Le décorateur @mcp.tool() transforme cette simple fonction Python en
@@ -71,34 +104,55 @@ mcp = FastMCP("meteo-factice")
 #                       "required": ["ville"]}
 @mcp.tool()
 def get_weather(ville: str) -> str:
-    """Retourne la météo actuelle pour une ville donnée.
+    """Retourne la météo actuelle réelle pour une ville donnée.
 
     Args:
         ville: Le nom de la ville (par exemple "Paris" ou "Tokyo").
     """
-    # Données 100% factices : l'objectif est de comprendre le protocole,
-    # pas de faire de la vraie météo. On utilise un tirage aléatoire mais
-    # "seedé" avec le nom de la ville pour qu'une même ville donne toujours
-    # la même réponse (plus facile à déboguer).
-    rng = random.Random(ville.lower())
-    # Chaque condition a sa plage de températures plausible, pour éviter
-    # les absurdités du genre "neigeux, 26°C".
-    conditions = {
-        "ensoleillé": (18, 35),
-        "nuageux": (8, 22),
-        "pluvieux": (5, 18),
-        "neigeux": (-5, 2),
-        "venteux": (5, 20),
-    }
-    meteo = rng.choice(list(conditions))
-    temperature = rng.randint(*conditions[meteo])
+    # ÉTAPE 1 — Géocodage : convertir "Paris" en coordonnées GPS.
+    # Un vrai appel réseau, comme n'importe quel outil ferait pour aller
+    # chercher une donnée réelle (fichier, base de données, autre API...).
+    reponse_geo = requests.get(
+        URL_GEOCODAGE,
+        params={"name": ville, "count": 1, "language": "fr", "format": "json"},
+        timeout=10,
+    )
+    reponse_geo.raise_for_status()
+    resultats = reponse_geo.json().get("results")
+
+    if not resultats:
+        # Une ville introuvable n'est pas un bug : c'est un résultat valide
+        # que le LLM doit pouvoir lire et expliquer à l'utilisateur.
+        return f"Ville « {ville} » introuvable."
+
+    lieu = resultats[0]
+    latitude, longitude = lieu["latitude"], lieu["longitude"]
+    nom_trouve = lieu["name"]
+
+    # ÉTAPE 2 — Prévision : demander la météo actuelle à ces coordonnées.
+    reponse_meteo = requests.get(
+        URL_METEO,
+        params={
+            "latitude": latitude,
+            "longitude": longitude,
+            "current": "temperature_2m,weather_code",
+            "timezone": "auto",
+        },
+        timeout=10,
+    )
+    reponse_meteo.raise_for_status()
+    actuel = reponse_meteo.json()["current"]
+
+    temperature = actuel["temperature_2m"]
+    code = actuel["weather_code"]
+    description = CODES_METEO.get(code, f"code météo {code}")
 
     # La valeur de retour : on renvoie une simple chaîne de caractères.
     # Le SDK l'emballe automatiquement dans le format de réponse MCP :
     #   {"content": [{"type": "text", "text": "..."}]}
     # MCP impose ce format "content" car un outil pourrait aussi renvoyer
     # des images ou d'autres types de contenu — ici, juste du texte.
-    return f"À {ville} : {meteo}, {temperature}°C (données factices)."
+    return f"À {nom_trouve} : {description}, {temperature}°C (source : open-meteo.com)."
 
 
 if __name__ == "__main__":

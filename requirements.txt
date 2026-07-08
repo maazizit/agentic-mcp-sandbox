@@ -7,3 +7,7 @@ mcp>=1.0.0
 # Client Python officiel d'Ollama — permet à l'agent de parler au LLM
 # local (llama3.2) et d'utiliser le tool calling.
 ollama>=0.4.0
+
+# Pour appeler la vraie API météo (Open-Meteo, gratuite, sans clé)
+# depuis mcp-server/server.py.
+requests>=2.31.0
